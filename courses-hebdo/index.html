@@ -127,6 +127,29 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
 .dlg-head h2 { font-size: 1.3rem; }
 dialog .recipe-body { padding: 0 16px 18px; }
 
+.drive { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 10px; margin-top: 14px; }
+.drive h2 { font-size: 1.1rem; font-weight: 800; }
+.drive p { margin: 0; color: var(--muted); font-size: .92rem; }
+.drive .storeline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: .95rem; }
+.drive .storeline b { min-width: 0; }
+.drive form { display: flex; gap: 8px; flex-wrap: wrap; }
+.drive input[type="text"] { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 8px 10px; }
+.stores { display: grid; gap: 6px; }
+.stores button { text-align: left; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+.stores button small { display: block; color: var(--muted); }
+.drive .msg { font-size: .92rem; padding: 8px 10px; border-radius: 8px; background: var(--mark-soft); color: var(--ink); }
+.drive .msg.ok { background: var(--accent-soft); }
+.picks { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow-y: auto; border-top: 1px solid var(--line); }
+.picks li { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: start; padding-block: 9px; border-bottom: 1px solid var(--line); }
+.picks input { width: 20px; height: 20px; accent-color: var(--accent); margin: 2px 0 0; }
+.picks .what { min-width: 0; }
+.picks .what small { display: block; color: var(--muted); font-size: .8rem; }
+.picks .price { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
+.picks .price small { display: block; font-weight: 400; color: var(--muted); font-size: .78rem; }
+.picks li.miss .what { color: var(--muted); }
+.drive .total { display: flex; justify-content: space-between; font-weight: 700; font-variant-numeric: tabular-nums; }
+.drive a.btn { text-decoration: none; display: inline-block; }
+.btn[disabled] { opacity: .5; cursor: default; }
 .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 999px; font-weight: 700; font-size: .9rem; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.show { opacity: 1; }
 .empty { color: var(--muted); padding: 20px 0; }
@@ -183,6 +206,11 @@ dialog .recipe-body { padding: 0 16px 18px; }
         <button class="btn quiet" id="uncheckAll">Tout décocher</button>
       </div>
     </div>
+    <section class="drive" id="drive" aria-labelledby="driveTitle">
+      <h2 id="driveTitle">Remplir mon panier Drive</h2>
+      <p>Je cherche chaque produit de la liste dans ton magasin et je prends le meilleur rapport qualité/prix : le moins cher pour la quantité voulue, en évitant les premiers prix. Tu vérifies, puis j'ajoute tout au panier. Les produits déjà cochés sont ignorés.</p>
+      <div id="driveBody"><p>Connexion à Carrefour…</p></div>
+    </section>
     <textarea id="copyBox" class="copybox" readonly hidden aria-label="Liste à copier"></textarea>
     <div class="list" id="list"></div>
     <div class="extras">
@@ -487,7 +515,7 @@ function renderRecipes() {
     <div class="recipe-body">${recipeBody(r)}</div></details>`).join("");
 }
 
-function renderAll() { renderHeader(); renderDays(); renderList(); renderRecipes(); }
+function renderAll() { renderHeader(); renderDays(); renderList(); renderRecipes(); if (typeof resetDrive === "function") resetDrive(); }
 
 /* ---------- Interactions ---------- */
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 1800); }
@@ -556,6 +584,244 @@ $("copyList").addEventListener("click", () => {
   const fallback = () => { const box = $("copyBox"); box.value = text; box.hidden = false; box.focus(); box.select(); toast("Texte sélectionné, copie-le à la main"); };
   try { navigator.clipboard.writeText(text).then(() => toast("Liste copiée"), fallback); } catch (e) { fallback(); }
 });
+
+
+/* ---------- Panier Drive Carrefour (connecteur Carrefour de claude.ai) ---------- */
+const CF = "Carrefour";
+const DRIVE_KEY = STORE_KEY + ":drive";
+let drive = { store: null, carts: {} };
+try { const raw = localStorage.getItem(DRIVE_KEY); if (raw) drive = Object.assign(drive, JSON.parse(raw)); } catch (e) {}
+function saveDrive() { try { localStorage.setItem(DRIVE_KEY, JSON.stringify(drive)); } catch (e) {} }
+let mcp = null, dstate = { phase: "init", stores: null, picks: null, msg: "", progress: "", result: null };
+
+const KW = {
+  "Bœuf haché 5%": "viande hachée boeuf", "Steaks hachés 15%": "steak haché", "Poulet fermier entier": "poulet entier",
+  "Huile d'olive": "huile olive", "Lait demi-écrémé": "lait demi écrémé", "Emmental en tranches": "emmental tranches",
+  "Cheddar en tranches": "cheddar tranches", "Poisson pané (filets)": "poisson pané", "Pâte de curry doux": "pâte curry",
+  "Épices fajitas": "épices fajitas", "Épices chili": "épices chili", "Épices couscous": "épices couscous",
+  "Assortiment charcuterie": "charcuterie raclette", "Fromage à raclette": "fromage raclette", "Yaourts nature": "yaourt nature",
+  "Fruits rouges surgelés": "fruits rouges", "Haricots verts surgelés": "haricots verts", "Petits pois surgelés": "petits pois",
+  "Potatoes surgelées": "potatoes", "Frites surgelées": "frites", "Pavés de saumon": "pavé saumon", "Dos de cabillaud": "cabillaud",
+  "Blancs de poulet": "blanc poulet", "Cuisses de poulet": "cuisse poulet", "Escalopes de dinde": "escalope dinde",
+  "Saucisses de Toulouse": "saucisse toulouse", "Poulet rôti tranché": "poulet rôti tranches", "Bouillon de légumes": "bouillon légumes",
+  "Galettes de sarrasin": "galette sarrasin", "Tortillas de blé": "tortillas", "Pains à burger": "pain burger",
+  "Plaques de lasagnes": "pâtes lasagnes", "Gnocchis": "gnocchi", "Chocolat en poudre": "chocolat poudre",
+  "Sirop d'érable": "sirop érable", "Pommes de terre grenaille": "pommes de terre grenaille", "Champignons de Paris": "champignons paris"
+};
+// Produits à écarter (ex. « pomme » ne doit pas trouver des pommes de terre) et mentions obligatoires
+const EXCL = { "Pomme": /terre|compote|jus|chips/, "Tomate": /cerise|concass|coulis|sauce|seche|ketchup/, "Oignon": /frit|confit|soupe/,
+  "Salade": /compos|lentille|piemont|thon|riz|pates|cesar/, "Citron": /jus|tarte/, "Carotte": /rapee|jus/, "Banane": /chips|sechee/,
+  "Beurre": /cacahuete|biscuit/, "Ail": /semoule/, "Lait demi-écrémé": /coco|amande|soja|avoine|riz/, "Bœuf haché 5%": /bolognaise|parmentier/ };
+const MUST = { "Bœuf haché 5%": /5\s*%/ };
+const PIECE_G = { "Oignon": 150, "Carotte": 125, "Tomate": 150, "Poivron": 200, "Courgette": 300, "Poireau": 250, "Citron": 120, "Pomme": 170, "Banane": 180 };
+const PACK_UNITS = { "sachet": 1, "pot": 1, "flacon": 1, "bocal": 1, "bouteille": 1 };
+const STOP = new Set(["de","du","des","a","au","aux","en","la","le","les","d","l","et"]);
+const norm = t => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/œ/g, "oe").replace(/[^a-z0-9]+/g, " ").trim();
+function keyword(name) { return KW[name] || name.replace(/\(.*?\)/g, "").replace(/\d+\s*%/g, "").trim(); }
+
+function needOf(it) {
+  if (it.u === "g") return { g: it.q };
+  if (it.u === "ml") return { ml: it.q };
+  if (it.u === "boules") return { g: it.q * 125, n: it.q };
+  if (it.u === "" || ["tranches","rouleau","rouleaux","pots"].includes(it.u)) {
+    const n = Math.ceil(it.q - 0.01);
+    return PIECE_G[it.name] ? { n, g: n * PIECE_G[it.name] } : { n };
+  }
+  return { packs: PACK_UNITS[it.u] ? Math.ceil(it.q - 0.01) : 1 };
+}
+function sizeOf(p) {
+  const t = norm((p.format || "") + " " + (p.packaging || "")).replace(/(\d) (\d)/g, "$1.$2");
+  const num = x => parseFloat(x.replace(",", "."));
+  const out = {};
+  let m = t.match(/(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(kg|g|cl|ml|l)\b/);
+  if (m) { const v = num(m[1]) * num(m[2]); assign(v, m[3]); out.n = +m[1]; }
+  else if ((m = t.match(/(\d+(?:\.\d+)?)\s*(kg|g|cl|ml|l)\b/))) assign(num(m[1]), m[2]);
+  function assign(v, u) { if (u === "kg") out.g = v * 1000; else if (u === "g") out.g = v; else if (u === "l") out.ml = v * 1000; else if (u === "cl") out.ml = v * 10; else out.ml = v; }
+  if (!out.n) { const c = t.match(/(?:x\s*(\d+)\b)|(?:\b(\d+)\s*(?:pieces?|unites?|oeufs?|tranches?|steaks?|pots?|galettes?|tortillas?|pains?|filets?|paves?|escalopes?|saucisses?|merguez|rouleaux?|boules?)\b)/);
+    if (c) out.n = +(c[1] || c[2]); }
+  return out;
+}
+const BUDGET = /classic|simpl|essential|premier prix|prix mini/;
+function evaluate(p, need) {
+  const price = typeof p.discounted_price === "number" ? p.discounted_price : p.price;
+  if (typeof price !== "number" || !(price > 0)) return null;
+  const sz = sizeOf(p);
+  let packs = 1, per = "";
+  const fit = (want, have) => Math.max(1, Math.ceil(want / have - 0.1));
+  if (need.packs) packs = need.packs;
+  else if (need.g && sz.g) packs = fit(need.g, sz.g);
+  else if (need.ml && sz.ml) packs = fit(need.ml, sz.ml);
+  else if (need.n && sz.n) packs = fit(need.n, sz.n);
+  else if (need.n) packs = need.n;
+  packs = Math.min(packs, 12);
+  if (sz.g) per = (price / sz.g * 1000).toFixed(2).replace(".", ",") + " €/kg";
+  else if (sz.ml) per = (price / sz.ml * 1000).toFixed(2).replace(".", ",") + " €/L";
+  const cost = packs * price;
+  const score = cost * (BUDGET.test(norm(p.label || "")) ? 1.15 : 1);
+  return { gtin: p.gtin, label: p.label, packaging: p.packaging, price, packs, cost, score, per };
+}
+function bestProduct(products, it) {
+  const words = norm(keyword(it.name)).split(" ").filter(w => w.length > 1 && !STOP.has(w)).map(w => w.slice(0, 5));
+  const ex = EXCL[it.name], must = MUST[it.name];
+  const pool = products.filter(p => {
+    const l = norm(p.label || ""), toks = l.split(" ");
+    return words.every(w => toks.some(t => t.startsWith(w))) && !(ex && ex.test(l)) && !(must && !must.test(p.label || ""));
+  });
+  const need = needOf(it);
+  return pool.map(p => evaluate(p, need)).filter(Boolean).sort((a, b) => a.score - b.score)[0] || null;
+}
+
+function errText(e) {
+  switch (e && e.code) {
+    case "server_not_connected": case "server_not_found": return "Le connecteur Carrefour n'est pas branché. Ajoute-le dans claude.ai, Réglages → Connecteurs, puis recharge la page.";
+    case "needs_reauth": return "La connexion à Carrefour a expiré. Reconnecte-la dans claude.ai, Réglages → Connecteurs.";
+    case "selection_required": return "Tu as plusieurs connecteurs Carrefour : choisis celui à utiliser quand Claude te le demande.";
+    case "not_in_manifest": case "not_granted": return "L'accès à Carrefour n'est pas autorisé pour cette page. Recharge-la et accepte la demande d'accès.";
+    case "blocked_by_policy": case "approval_required": return "Ton organisation bloque cet outil Carrefour.";
+    case "server_unavailable": case "rate_limited": return "Carrefour ne répond pas pour le moment. Réessaie dans quelques instants.";
+    case "tool_error": return "Carrefour a refusé la demande : " + (e.message || "erreur inconnue") + ".";
+    default: return "Problème avec Carrefour : " + ((e && e.message) || "erreur inconnue") + ".";
+  }
+}
+const call = async (tool, input) => (await mcp.callTool(CF, tool, input, { cache: false })).payload || {};
+const euro = v => v.toFixed(2).replace(".", ",") + " €";
+const esc = t => String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function renderDrive() {
+  const b = $("driveBody"); if (!b) return;
+  const st = drive.store;
+  if (dstate.phase === "init") { b.innerHTML = "<p>Connexion à Carrefour…</p>"; return; }
+  if (dstate.phase === "off") { b.innerHTML = '<p class="msg">Le remplissage automatique marche quand cette page est ouverte dans Claude, avec le connecteur Carrefour. Ici, utilise les boutons « Chercher » de la liste.</p>'; return; }
+  let h = "";
+  if (!st || dstate.phase === "store") {
+    h += `<form id="storeForm"><input type="text" id="storeQuery" placeholder="Ta ville ou ton code postal" autocomplete="postal-code" aria-label="Ville ou code postal">
+      <button class="btn" type="submit">Trouver mon Drive</button></form>`;
+    if (dstate.stores) h += `<div class="stores">` + (dstate.stores.length ? dstate.stores.map((s, i) => `<button data-store="${i}">${esc(s.name)}<small>${esc(s.city || "")}${s.address ? " · " + esc(s.address) : ""}</small></button>`).join("") : "<p>Aucun Drive trouvé à cet endroit.</p>") + `</div>`;
+  } else {
+    h += `<div class="storeline">Drive : <b>${esc(st.name)}</b> <button class="btn quiet" id="changeStore">Changer</button></div>`;
+    if (dstate.phase === "ready") h += `<div class="actions"><button class="btn primary" id="driveSearch">Chercher les produits</button></div>`;
+    if (dstate.phase === "searching") h += `<p>${esc(dstate.progress)}</p>`;
+    if (dstate.picks && (dstate.phase === "review" || dstate.phase === "adding")) {
+      const sel = dstate.picks.filter(x => x.best && x.on), total = sel.reduce((a, x) => a + x.best.cost, 0);
+      h += `<ul class="picks">` + dstate.picks.map((x, i) => x.best
+        ? `<li><input type="checkbox" id="pk-${i}" data-pick="${i}"${x.on ? " checked" : ""}><label class="what" for="pk-${i}">${esc(x.best.label)}<small>${esc(x.item.name)} · besoin ${fmtQty(x.item.q, x.item.u)} · ${esc(x.best.packaging || "")}${x.pantry ? " · placard, coche si tu en manques" : ""}</small></label>
+            <span class="price">${x.best.packs > 1 ? x.best.packs + " × " : ""}${euro(x.best.price)}<small>${esc(x.best.per)}</small></span></li>`
+        : `<li class="miss"><span></span><span class="what">${esc(x.item.name)}<small>${esc(x.err || "Rien de correspondant dans ce magasin, à ajouter à la main")}</small></span><a class="btn quiet" href="https://www.carrefour.fr/s?q=${encodeURIComponent(x.item.name)}" target="_blank" rel="noopener">Chercher</a></li>`).join("") + `</ul>
+        <div class="total"><span>${sel.length} produits</span><span>environ ${euro(total)}</span></div>
+        <div class="actions"><button class="btn primary" id="driveAdd"${dstate.phase === "adding" || !sel.length ? " disabled" : ""}>${dstate.phase === "adding" ? "Ajout en cours…" : "Ajouter au panier"}</button>
+        <button class="btn quiet" id="driveSearch">Relancer la recherche</button></div>`;
+    }
+    if (dstate.phase === "done" && dstate.result) {
+      const r = dstate.result;
+      h += `<p class="msg ok">${r.added} produits ajoutés à ton panier${r.total ? ", total " + esc(r.total) : ""}.${r.issues ? " " + esc(r.issues) : ""}</p>
+        <div class="actions">${r.link ? `<a class="btn primary" href="${esc(r.link)}" target="_blank" rel="noopener">Finaliser sur Carrefour.fr</a>` : ""}<button class="btn quiet" id="driveSearch">Recommencer</button></div>`;
+    }
+  }
+  if (dstate.msg) h += `<p class="msg">${esc(dstate.msg)}</p>`;
+  b.innerHTML = h;
+}
+
+async function prepareStore() {
+  await call("set_pickup_mode", { pickup_mode: "DRIVE" });
+  await call("set_store", { store: drive.store.raw });
+}
+async function runSearch() {
+  const w = week(), groups = shoppingList(), items = [];
+  RAYON_ORDER.forEach(r => (groups[r] || []).forEach(it => { if (!w.checked[it.key]) items.push(it); }));
+  if (!items.length) { dstate.msg = "Tout est déjà coché, il n'y a rien à chercher."; renderDrive(); return; }
+  dstate.phase = "searching"; dstate.msg = ""; dstate.progress = "Préparation du magasin…"; renderDrive();
+  try { await prepareStore(); } catch (e) { dstate.phase = "ready"; dstate.msg = errText(e); renderDrive(); return; }
+  const picks = items.map(item => ({ item, best: null, on: item.ray !== "PL", pantry: item.ray === "PL" }));
+  let done = 0, fatal = null;
+  const queue = picks.slice();
+  async function worker() {
+    while (queue.length && !fatal) {
+      const x = queue.shift();
+      try {
+        const res = await call("search_products", { keyword: keyword(x.item.name), limit: 15, facility_service_id: drive.store.fsid, service_type: "DRIVE" });
+        x.best = bestProduct(res.products || [], x.item);
+      } catch (e) {
+        if (["server_not_connected","needs_reauth","not_in_manifest","not_granted","blocked_by_policy","selection_required"].includes(e && e.code)) fatal = e;
+        else x.err = errText(e);
+      }
+      done++; dstate.progress = "Recherche des produits : " + done + " sur " + picks.length + "…"; renderDrive();
+    }
+  }
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  if (fatal) { dstate.phase = "ready"; dstate.msg = errText(fatal); renderDrive(); return; }
+  dstate.picks = picks.filter(x => x.best).concat(picks.filter(x => !x.best)); dstate.phase = "review"; renderDrive();
+}
+async function addToCart() {
+  const sel = dstate.picks.filter(x => x.best && x.on);
+  if (!sel.length) return;
+  dstate.phase = "adding"; dstate.msg = ""; renderDrive();
+  const merged = new Map();
+  sel.forEach(x => { const m = merged.get(x.best.gtin); if (m) m.quantity += x.best.packs; else merged.set(x.best.gtin, { gtin: x.best.gtin, quantity: x.best.packs, packaging: x.best.packaging }); });
+  const input = { products: [...merged.values()], facility_service_id: drive.store.fsid, service_type: "DRIVE", store_name: drive.store.name };
+  if (drive.carts[weekKey]) input.cart_id = drive.carts[weekKey];
+  try {
+    await prepareStore();
+    const r = await call("add_to_cart", input);
+    if (r.cart_id) { drive.carts[weekKey] = r.cart_id; saveDrive(); }
+    const rejected = r.rejected_gtins || [], gone = r.unavailable_products || [];
+    const names = g => { const x = sel.find(y => y.best.gtin === (g.gtin || g)); return x ? x.item.name : (g.label || g.title || g.gtin || g); };
+    let issues = "";
+    if (rejected.length) issues += "Refusés par Carrefour : " + rejected.map(names).join(", ") + ". ";
+    if (gone.length) issues += "Plus disponibles : " + gone.map(names).join(", ") + ".";
+    // Les produits ajoutés sont cochés dans la liste
+    const ok = new Set(merged.keys()); rejected.forEach(g => ok.delete(g.gtin || g));
+    sel.forEach(x => { if (ok.has(x.best.gtin)) w0().checked[x.item.key] = 1; }); save();
+    const tot = r.total_with_bags_deposit;
+    dstate.result = { added: ok.size, total: typeof tot === "number" ? euro(tot) : (tot || ""), link: r.cart_in_carrefour_link || "", issues };
+    dstate.phase = "done"; renderList();
+  } catch (e) {
+    dstate.phase = "review";
+    dstate.msg = (e && (e.code === "server_unavailable" || e.code === "upstream_error"))
+      ? "Pas de réponse claire de Carrefour : l'ajout a peut-être eu lieu. Regarde ton panier sur carrefour.fr avant de relancer."
+      : errText(e);
+  }
+  renderDrive();
+}
+const w0 = () => week();
+function resetDrive() { if (["review","done"].includes(dstate.phase)) { dstate.phase = "ready"; dstate.picks = null; dstate.result = null; dstate.msg = ""; renderDrive(); } }
+
+$("driveBody").addEventListener("submit", async e => {
+  if (e.target.id !== "storeForm") return;
+  e.preventDefault();
+  const q = $("storeQuery").value.trim(); if (!q) return;
+  dstate.msg = ""; dstate.stores = null; renderDrive(); $("storeQuery") && ($("storeQuery").value = q);
+  try {
+    await call("set_pickup_mode", { pickup_mode: "DRIVE" });
+    const r = await call("search_store", { query: q, serviceType: "DRIVE" });
+    dstate.stores = r.stores || [];
+  } catch (err) { dstate.msg = errText(err); }
+  renderDrive(); if ($("storeQuery")) $("storeQuery").value = q;
+});
+$("driveBody").addEventListener("click", async e => {
+  const sb = e.target.closest("[data-store]");
+  if (sb) {
+    const s = dstate.stores[+sb.dataset.store];
+    const svc = (s.services || []).find(x => x.storeService === "PICKING_DRIVE") || (s.services || [])[0];
+    if (!svc) { dstate.msg = "Ce magasin ne propose pas de Drive."; renderDrive(); return; }
+    try { await call("set_store", { store: s }); } catch (err) { dstate.msg = errText(err); renderDrive(); return; }
+    drive.store = { name: s.name, id: s.id, fsid: svc.facility_service_id, raw: s }; drive.carts = {}; saveDrive();
+    dstate.phase = "ready"; dstate.stores = null; dstate.msg = ""; renderDrive(); return;
+  }
+  if (e.target.closest("#changeStore")) { dstate.phase = "store"; dstate.stores = null; renderDrive(); return; }
+  if (e.target.closest("#driveSearch")) { runSearch(); return; }
+  if (e.target.closest("#driveAdd")) { addToCart(); return; }
+});
+$("driveBody").addEventListener("change", e => {
+  const c = e.target.closest("[data-pick]"); if (!c) return;
+  dstate.picks[+c.dataset.pick].on = c.checked; renderDrive();
+});
+
+renderDrive();
+(async () => {
+  try { mcp = window.claude && window.claude.use ? await window.claude.use("mcp") : null; } catch (e) { mcp = null; }
+  dstate.phase = mcp ? (drive.store ? "ready" : "store") : "off";
+  renderDrive();
+})();
 
 renderAll();
 try { const t = localStorage.getItem(STORE_KEY + ":tab"); if (t && t !== "menu") showTab(t); } catch (e) {}
