@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Courses Hebdo</title>
+<meta name="description" content="Menus de la semaine et liste de courses pour le Drive du samedi">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+/* Layout : carnet de marché. Barre collante (semaine + onglets), une colonne de 720px max, jours en cartes légères, liste de courses par rayon. */
+:root {
+  --bg: #f5f7f1;
+  --surface: #ffffff;
+  --ink: #1d2920;
+  --muted: #5f6d63;
+  --line: #d9e0d4;
+  --accent: #2c6a43;
+  --accent-soft: #e2efe5;
+  --mark: #d9a21b;
+  --mark-soft: #fbf1d6;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111713; --surface: #19211b; --ink: #e5ece6; --muted: #9aa89e; --line: #2c3830;
+    --accent: #84c79d; --accent-soft: #1f3326; --mark: #e8c063; --mark-soft: #362d16; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111713; --surface: #19211b; --ink: #e5ece6; --muted: #9aa89e; --line: #2c3830;
+  --accent: #84c79d; --accent-soft: #1f3326; --mark: #e8c063; --mark-soft: #362d16; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.45; margin: 0; }
+.wrap { max-width: 720px; margin: 0 auto; padding-inline: 16px; padding-block: 0 48px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+.top-inner { max-width: 720px; margin: 0 auto; padding-inline: 16px; padding-block: 12px 0; display: grid; gap: 10px; }
+.brand { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand h1 { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.01em; }
+.brand h1 span { color: var(--accent); }
+.weeknav { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.weeknav button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; width: 32px; height: 32px; display: grid; place-items: center; }
+.weeknav .label { font-weight: 700; font-size: .95rem; min-width: 0; text-align: center; }
+.tabs { display: flex; gap: 4px; }
+.tabs button { flex: 1; border: 0; background: transparent; padding: 10px 6px 11px; font-weight: 700; color: var(--muted); border-bottom: 3px solid transparent; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tabs .count { font-variant-numeric: tabular-nums; font-weight: 400; color: var(--muted); }
+
+.intro { display: grid; gap: 10px; padding-block: 18px 6px; }
+.intro p { margin: 0; color: var(--muted); max-width: 62ch; }
+.pickup { display: inline-block; background: var(--mark-soft); color: var(--ink); border-radius: 999px; padding: 4px 12px; font-size: .9rem; width: fit-content; }
+.pickup b { color: var(--ink); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: .92rem; }
+.btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.btn.quiet { background: transparent; }
+.people { display: inline-flex; align-items: center; gap: 6px; font-size: .92rem; color: var(--muted); }
+.people select { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 6px; }
+
+.days { display: grid; gap: 14px; padding-block: 14px; }
+.day { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px 6px; }
+.day.today { border-color: var(--accent); }
+.day-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding-bottom: 4px; }
+.day-head h2 { font-size: 1.15rem; font-weight: 800; }
+.day-head .date { color: var(--muted); font-size: .88rem; font-variant-numeric: tabular-nums; }
+.tag-today { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.slot { display: grid; grid-template-columns: 5.6rem 1fr auto; gap: 8px; align-items: center; padding-block: 8px; border-top: 1px dashed var(--line); }
+.slot:first-of-type { border-top: 0; }
+.slot .when { font-size: .74rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.slot .dish { min-width: 0; }
+.slot select { width: 100%; border: 1px solid transparent; background: transparent; padding: 4px 2px; font-weight: 700; border-radius: 6px; text-overflow: ellipsis; }
+.slot select:hover, .slot select:focus { border-color: var(--line); background: var(--bg); }
+.slot .meta { font-size: .8rem; color: var(--muted); padding-left: 3px; }
+.slot .meta button { border: 0; background: none; padding: 0; color: var(--accent); font-size: .8rem; text-decoration: underline; text-underline-offset: 2px; }
+.icon-btn { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; width: 34px; height: 34px; display: grid; place-items: center; color: var(--muted); }
+.icon-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+.list { display: grid; gap: 18px; padding-block: 14px; }
+.rayon h3 { font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 800; padding-bottom: 6px; border-bottom: 2px solid var(--accent-soft); }
+.rayon.pantry h3 { color: var(--mark); border-bottom-color: var(--mark-soft); }
+.rayon .hint { font-size: .85rem; color: var(--muted); margin: 6px 0 0; }
+.items { list-style: none; margin: 0; padding: 0; }
+.items li { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; padding-block: 9px; border-bottom: 1px solid var(--line); }
+.items input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
+.items label { min-width: 0; cursor: pointer; }
+.items .qty { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .92rem; white-space: nowrap; }
+.items .for { display: block; font-size: .78rem; color: var(--muted); }
+.items li.done label, .items li.done .qty { text-decoration: line-through; opacity: .55; }
+.items a { color: var(--accent); font-size: .8rem; font-weight: 700; text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+.progress { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; }
+.progress div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+.extras { padding-top: 8px; }
+.extras textarea { width: 100%; min-height: 90px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 10px 12px; resize: vertical; }
+.copybox { width: 100%; min-height: 160px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 10px 12px; margin-top: 12px; }
+.extras label { font-weight: 700; display: block; padding-bottom: 6px; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 14px 4px; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: .88rem; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 700; }
+.recipes { display: grid; gap: 10px; padding-block: 10px; }
+.recipe { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.recipe summary { list-style: none; cursor: pointer; padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; }
+.recipe summary::-webkit-details-marker { display: none; }
+.recipe summary strong { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; }
+.recipe summary .time { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.badges { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; }
+.badge { font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.badge.warm { background: var(--mark-soft); color: var(--mark); }
+.recipe-body { padding: 0 14px 14px; display: grid; gap: 10px; }
+.recipe-body ul, .recipe-body ol { margin: 0; padding-left: 1.2rem; }
+.recipe-body li { padding-block: 2px; }
+.recipe-body h4 { margin: 0; font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.recipe-body .q { font-variant-numeric: tabular-nums; color: var(--muted); }
+
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); padding: 0; width: min(560px, calc(100vw - 32px)); max-height: 85vh; }
+dialog::backdrop { background: rgb(0 0 0 / .45); }
+.dlg-head { display: flex; justify-content: space-between; align-items: start; gap: 10px; padding: 16px 16px 8px; }
+.dlg-head h2 { font-size: 1.3rem; }
+dialog .recipe-body { padding: 0 16px 18px; }
+
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 999px; font-weight: 700; font-size: .9rem; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+.empty { color: var(--muted); padding: 20px 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 420px) {
+  .slot { grid-template-columns: 1fr auto; }
+  .slot .when { grid-column: 1 / -1; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <h1>Courses <span>Hebdo</span></h1>
+      <div class="weeknav">
+        <button id="prevWeek" aria-label="Semaine précédente">‹</button>
+        <span class="label" id="weekLabel">…</span>
+        <button id="nextWeek" aria-label="Semaine suivante">›</button>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" id="tab-menu" aria-selected="true" data-tab="menu">Menu</button>
+      <button role="tab" id="tab-courses" aria-selected="false" data-tab="courses">Courses <span class="count" id="countCourses"></span></button>
+      <button role="tab" id="tab-recettes" aria-selected="false" data-tab="recettes">Recettes</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="panel-menu">
+    <div class="intro">
+      <span class="pickup" id="pickupLine"></span>
+      <p>Voici ma proposition pour la semaine. Garde-la telle quelle ou change un plat avec le menu déroulant. La flèche ↻ propose un autre plat pour ce repas.</p>
+      <div class="actions">
+        <button class="btn primary" id="toCourses">Voir la liste de courses</button>
+        <button class="btn" id="reroll">Nouvelle proposition</button>
+        <label class="people" for="people">Pour
+          <select id="people"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select> pers.
+        </label>
+      </div>
+    </div>
+    <div class="days" id="days"></div>
+  </section>
+
+  <section id="panel-courses" hidden>
+    <div class="intro">
+      <span class="pickup" id="pickupLine2"></span>
+      <p>Tout ce qu'il faut pour les repas choisis, regroupé par rayon. Coche au fur et à mesure que tu remplis ton panier Drive. « Chercher » ouvre la recherche Carrefour sur ce produit.</p>
+      <div class="progress" aria-hidden="true"><div id="progressBar"></div></div>
+      <div class="actions">
+        <button class="btn primary" id="copyList">Copier la liste</button>
+        <button class="btn quiet" id="uncheckAll">Tout décocher</button>
+      </div>
+    </div>
+    <textarea id="copyBox" class="copybox" readonly hidden aria-label="Liste à copier"></textarea>
+    <div class="list" id="list"></div>
+    <div class="extras">
+      <label for="extras">À ajouter en plus (goûters, fruits, produits ménagers…)</label>
+      <textarea id="extras" placeholder="Une ligne par produit, par exemple :&#10;Compotes en gourde x12&#10;Liquide vaisselle"></textarea>
+    </div>
+  </section>
+
+  <section id="panel-recettes" hidden>
+    <div class="filters" id="filters"></div>
+    <div class="recipes" id="recipes"></div>
+  </section>
+</main>
+
+<dialog id="dlg">
+  <div class="dlg-head"><h2 id="dlgTitle"></h2><button class="icon-btn" id="dlgClose" aria-label="Fermer">✕</button></div>
+  <div class="recipe-body" id="dlgBody"></div>
+</dialog>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- Rayons ---------- */
+const RAYONS = {
+  FL: "Fruits & légumes", VI: "Boucherie & volaille", PO: "Poissonnerie", CH: "Charcuterie & traiteur",
+  CR: "Crèmerie & œufs", FR: "Fromages", PA: "Pain & viennoiserie", ES: "Épicerie salée",
+  SU: "Épicerie sucrée & petit-déj", SG: "Surgelés", BO: "Boissons", PL: "Placard (à vérifier)"
+};
+const RAYON_ORDER = ["FL","VI","PO","CH","CR","FR","PA","ES","SU","SG","BO","PL"];
+
+/* ---------- Recettes (quantités pour 4, dont 2 ados : portions généreuses) ----------
+   ingrédient : [nom, quantité, unité, rayon]  unités : g, ml, "" (pièce), ou libellé (tranches, sachet…) */
+const MEALS = [
+  { id:"bolo", n:"Spaghetti bolognaise", t:30, tags:["rapide"], i:[["Spaghetti",600,"g","ES"],["Bœuf haché 5%",500,"g","VI"],["Coulis de tomate",700,"g","ES"],["Oignon",1,"","FL"],["Carotte",2,"","FL"],["Parmesan râpé",80,"g","FR"],["Huile d'olive",1,"c. à s.","PL"]],
+    s:["Faire revenir l'oignon et les carottes râpées dans l'huile.","Ajouter le bœuf, le faire dorer, saler, poivrer.","Verser le coulis et laisser mijoter 15 min.","Cuire les spaghetti, servir avec le parmesan."] },
+  { id:"carbo", n:"Pâtes carbonara", t:20, tags:["rapide"], i:[["Penne",600,"g","ES"],["Lardons fumés",300,"g","CH"],["Crème fraîche",200,"ml","CR"],["Œufs",2,"","CR"],["Parmesan râpé",60,"g","FR"]],
+    s:["Cuire les pâtes.","Dorer les lardons à sec.","Mélanger crème, œufs et parmesan.","Hors du feu, tout mélanger avec les pâtes égouttées."] },
+  { id:"hachis", n:"Hachis parmentier", t:50, tags:["four"], i:[["Pommes de terre",1500,"g","FL"],["Bœuf haché 5%",600,"g","VI"],["Oignon",1,"","FL"],["Lait demi-écrémé",200,"ml","CR"],["Beurre",50,"g","CR"],["Emmental râpé",100,"g","FR"]],
+    s:["Cuire les pommes de terre 20 min à l'eau, écraser avec lait et beurre.","Faire revenir l'oignon et la viande, saler, poivrer.","Viande au fond du plat, purée dessus, emmental.","20 min au four à 200 °C."] },
+  { id:"poulet", n:"Poulet rôti et pommes de terre", t:75, tags:["week-end","four"], i:[["Poulet fermier entier",1,"","VI"],["Pommes de terre grenaille",1200,"g","FL"],["Ail",1,"tête","FL"],["Thym",1,"bouquet","FL"],["Huile d'olive",2,"c. à s.","PL"]],
+    s:["Préchauffer le four à 210 °C.","Poulet huilé, salé, poivré, dans le plat avec les pommes de terre et l'ail.","Cuire 1 h 15 en arrosant deux fois.","Laisser reposer 10 min avant de découper."] },
+  { id:"croque", n:"Croque-monsieur et salade", t:20, tags:["rapide"], i:[["Pain de mie",500,"g","PA"],["Jambon blanc",8,"tranches","CH"],["Emmental en tranches",8,"tranches","FR"],["Crème fraîche",100,"ml","CR"],["Salade",1,"","FL"]],
+    s:["Tartiner le pain d'un peu de crème.","Garnir de jambon et d'emmental, refermer.","15 min au four à 200 °C.","Servir avec la salade."] },
+  { id:"quiche", n:"Quiche lorraine et salade", t:45, tags:["four"], i:[["Pâte brisée",1,"rouleau","CR"],["Lardons fumés",200,"g","CH"],["Œufs",4,"","CR"],["Crème fraîche",400,"ml","CR"],["Emmental râpé",100,"g","FR"],["Salade",1,"","FL"]],
+    s:["Étaler la pâte dans un moule.","Dorer les lardons, les répartir sur la pâte.","Battre œufs et crème, ajouter l'emmental, verser.","35 min au four à 190 °C."] },
+  { id:"fajitas", n:"Fajitas de poulet", t:30, tags:["rapide"], i:[["Tortillas de blé",12,"","ES"],["Blancs de poulet",600,"g","VI"],["Poivron",2,"","FL"],["Oignon",1,"","FL"],["Cheddar râpé",150,"g","FR"],["Crème fraîche",200,"ml","CR"],["Épices fajitas",1,"sachet","ES"]],
+    s:["Émincer poulet, poivrons et oignon.","Saisir le poulet, ajouter légumes et épices.","Chauffer les tortillas.","Chacun garnit avec crème et cheddar."] },
+  { id:"burger", n:"Burgers maison et potatoes", t:30, tags:["week-end"], i:[["Pains à burger",6,"","PA"],["Steaks hachés 15%",6,"","VI"],["Cheddar en tranches",6,"tranches","FR"],["Tomate",2,"","FL"],["Salade",1,"","FL"],["Potatoes surgelées",1000,"g","SG"],["Ketchup",1,"flacon","PL"]],
+    s:["Cuire les potatoes au four selon le paquet.","Cuire les steaks, poser le cheddar en fin de cuisson.","Toaster les pains.","Monter les burgers avec tomate et salade."] },
+  { id:"saumon", n:"Saumon, riz et haricots verts", t:25, tags:["poisson","rapide"], i:[["Pavés de saumon",4,"","PO"],["Riz basmati",400,"g","ES"],["Haricots verts surgelés",600,"g","SG"],["Citron",1,"","FL"],["Beurre",20,"g","CR"]],
+    s:["Cuire le riz.","Cuire les haricots verts 10 min à la vapeur ou à l'eau, beurrer.","Poêler le saumon 4 min côté peau, 2 min de l'autre.","Servir avec un filet de citron."] },
+  { id:"panes", n:"Poisson pané et purée", t:30, tags:["poisson","rapide"], i:[["Poisson pané (filets)",12,"","SG"],["Pommes de terre",1200,"g","FL"],["Lait demi-écrémé",250,"ml","CR"],["Beurre",50,"g","CR"],["Citron",1,"","FL"]],
+    s:["Cuire les pommes de terre 20 min, écraser avec lait et beurre.","Cuire le poisson pané au four ou à la poêle.","Servir avec le citron."] },
+  { id:"chili", n:"Chili con carne et riz", t:40, tags:[], i:[["Bœuf haché 5%",500,"g","VI"],["Haricots rouges",800,"g","ES"],["Tomates concassées",800,"g","ES"],["Oignon",1,"","FL"],["Poivron",1,"","FL"],["Riz long",400,"g","ES"],["Épices chili",1,"sachet","ES"]],
+    s:["Faire revenir oignon et poivron.","Ajouter la viande puis les épices.","Ajouter tomates et haricots égouttés, mijoter 20 min.","Servir avec le riz."] },
+  { id:"curry", n:"Curry de poulet au lait de coco", t:35, tags:[], i:[["Blancs de poulet",600,"g","VI"],["Lait de coco",400,"ml","ES"],["Pâte de curry doux",1,"pot","ES"],["Oignon",1,"","FL"],["Courgette",2,"","FL"],["Riz basmati",400,"g","ES"]],
+    s:["Faire revenir l'oignon et la pâte de curry.","Ajouter le poulet en dés, puis la courgette.","Verser le lait de coco, mijoter 15 min.","Servir avec le riz."] },
+  { id:"gratinpates", n:"Gratin de pâtes au jambon", t:35, tags:["four"], i:[["Coquillettes",600,"g","ES"],["Jambon blanc",6,"tranches","CH"],["Crème fraîche",250,"ml","CR"],["Emmental râpé",150,"g","FR"]],
+    s:["Cuire les pâtes un peu fermes.","Mélanger avec jambon en dés et crème.","Couvrir d'emmental.","15 min au four à 210 °C."] },
+  { id:"pizza", n:"Pizzas maison", t:30, tags:["week-end","four"], i:[["Pâte à pizza",2,"rouleaux","CR"],["Coulis de tomate",300,"g","ES"],["Mozzarella",2,"boules","FR"],["Jambon blanc",4,"tranches","CH"],["Champignons de Paris",250,"g","FL"],["Origan",1,"pincée","PL"]],
+    s:["Étaler les pâtes, napper de coulis.","Garnir de jambon, champignons et mozzarella.","15 min au four à 240 °C."] },
+  { id:"tortilla", n:"Omelette aux pommes de terre et salade", t:30, tags:["végétarien"], i:[["Œufs",10,"","CR"],["Pommes de terre",800,"g","FL"],["Oignon",1,"","FL"],["Salade",1,"","FL"],["Huile d'olive",3,"c. à s.","PL"]],
+    s:["Cuire les pommes de terre en fines rondelles avec l'oignon à la poêle, 15 min.","Verser les œufs battus salés.","Cuire à feu doux couvert 10 min, retourner.","Servir avec la salade."] },
+  { id:"soupe", n:"Soupe de légumes et tartines au fromage", t:40, tags:["végétarien"], i:[["Carotte",4,"","FL"],["Poireau",2,"","FL"],["Pommes de terre",500,"g","FL"],["Bouillon de légumes",2,"cubes","PL"],["Pain de campagne",1,"","PA"],["Comté",250,"g","FR"]],
+    s:["Couper les légumes, couvrir d'eau avec les cubes.","Cuire 25 min et mixer.","Griller les tartines avec le comté."] },
+  { id:"lasagnes", n:"Lasagnes à la bolognaise", t:70, tags:["week-end","four"], i:[["Plaques de lasagnes",500,"g","ES"],["Bœuf haché 5%",600,"g","VI"],["Coulis de tomate",700,"g","ES"],["Oignon",1,"","FL"],["Lait demi-écrémé",750,"ml","CR"],["Beurre",50,"g","CR"],["Farine",50,"g","PL"],["Emmental râpé",150,"g","FR"]],
+    s:["Préparer la bolognaise : oignon, viande, coulis, 15 min.","Béchamel : beurre fondu, farine, puis lait en fouettant.","Alterner pâtes, bolognaise, béchamel ; finir par l'emmental.","40 min au four à 190 °C."] },
+  { id:"cantonais", n:"Riz cantonais", t:25, tags:["rapide"], i:[["Riz long",500,"g","ES"],["Œufs",4,"","CR"],["Petits pois surgelés",300,"g","SG"],["Jambon blanc",4,"tranches","CH"],["Sauce soja",1,"flacon","PL"]],
+    s:["Cuire le riz la veille ou le laisser refroidir.","Faire une omelette fine, la couper en lanières.","Sauter riz, petits pois, jambon en dés et omelette.","Assaisonner de sauce soja."] },
+  { id:"dinde", n:"Escalopes de dinde à la crème et tagliatelles", t:25, tags:["rapide"], i:[["Escalopes de dinde",4,"","VI"],["Tagliatelles",600,"g","ES"],["Champignons de Paris",250,"g","FL"],["Crème fraîche",250,"ml","CR"]],
+    s:["Cuire les tagliatelles.","Dorer les escalopes, réserver.","Faire revenir les champignons, ajouter la crème, remettre la dinde 5 min."] },
+  { id:"lentilles", n:"Saucisses et lentilles", t:40, tags:[], i:[["Saucisses de Toulouse",6,"","VI"],["Lentilles vertes",500,"g","ES"],["Carotte",2,"","FL"],["Oignon",1,"","FL"]],
+    s:["Cuire les lentilles 25 min avec carottes et oignon.","Dorer les saucisses à la poêle 15 min.","Servir ensemble."] },
+  { id:"galettes", n:"Galettes complètes", t:20, tags:["rapide"], i:[["Galettes de sarrasin",8,"","PA"],["Jambon blanc",8,"tranches","CH"],["Œufs",8,"","CR"],["Emmental râpé",200,"g","FR"],["Beurre",30,"g","CR"]],
+    s:["Chauffer une galette beurrée à la poêle.","Garnir d'emmental, jambon, casser un œuf au centre.","Replier les bords, couvrir 2 min."] },
+  { id:"steakfrites", n:"Steak haché, frites et salade", t:25, tags:["rapide"], i:[["Steaks hachés 15%",6,"","VI"],["Frites surgelées",1200,"g","SG"],["Salade",1,"","FL"]],
+    s:["Cuire les frites au four selon le paquet.","Cuire les steaks à la poêle.","Servir avec la salade."] },
+  { id:"gnocchis", n:"Gnocchis poêlés, tomates cerises et mozzarella", t:20, tags:["rapide","végétarien"], i:[["Gnocchis",1000,"g","CR"],["Tomates cerises",500,"g","FL"],["Mozzarella",2,"boules","FR"],["Basilic",1,"pot","FL"]],
+    s:["Poêler les gnocchis à l'huile 8 min.","Ajouter les tomates cerises 3 min.","Hors du feu, mozzarella en morceaux et basilic."] },
+  { id:"raclette", n:"Raclette", t:15, tags:["week-end"], i:[["Fromage à raclette",1000,"g","FR"],["Pommes de terre",1500,"g","FL"],["Assortiment charcuterie",400,"g","CH"],["Cornichons",1,"bocal","ES"]],
+    s:["Cuire les pommes de terre en robe des champs 25 min.","Allumer l'appareil, chacun fait fondre son fromage."] },
+  { id:"couscous", n:"Couscous poulet merguez", t:60, tags:["week-end"], i:[["Cuisses de poulet",4,"","VI"],["Merguez",6,"","VI"],["Semoule moyenne",500,"g","ES"],["Courgette",2,"","FL"],["Carotte",3,"","FL"],["Pois chiches",400,"g","ES"],["Épices couscous",1,"sachet","ES"],["Bouillon de légumes",2,"cubes","PL"]],
+    s:["Dorer le poulet, ajouter légumes, épices, bouillon et eau à hauteur.","Mijoter 40 min, ajouter les pois chiches 10 min avant la fin.","Griller les merguez.","Préparer la semoule à l'eau bouillante."] },
+  { id:"tartiflette", n:"Tartiflette et salade", t:60, tags:["week-end","four"], i:[["Pommes de terre",1500,"g","FL"],["Reblochon",1,"","FR"],["Lardons fumés",200,"g","CH"],["Oignon",2,"","FL"],["Crème fraîche",200,"ml","CR"],["Salade",1,"","FL"]],
+    s:["Cuire les pommes de terre 20 min, couper en rondelles.","Dorer lardons et oignons.","Mélanger avec la crème dans un plat, reblochon coupé en deux dessus.","25 min au four à 200 °C."] },
+  { id:"boulettes", n:"Boulettes sauce tomate et semoule", t:35, tags:[], i:[["Boulettes de bœuf",600,"g","VI"],["Tomates concassées",800,"g","ES"],["Oignon",1,"","FL"],["Semoule moyenne",400,"g","ES"]],
+    s:["Dorer les boulettes, ajouter l'oignon.","Verser les tomates, mijoter 20 min.","Servir avec la semoule."] },
+  { id:"cabillaud", n:"Cabillaud, pommes de terre vapeur et carottes", t:30, tags:["poisson"], i:[["Dos de cabillaud",4,"","PO"],["Pommes de terre",1000,"g","FL"],["Carotte",4,"","FL"],["Crème fraîche",150,"ml","CR"],["Citron",1,"","FL"]],
+    s:["Cuire pommes de terre et carottes à la vapeur 20 min.","Cuire le cabillaud au four 12 min à 200 °C avec un filet d'huile.","Servir avec la crème citronnée."] },
+  { id:"rotiporc", n:"Rôti de porc et flageolets", t:60, tags:["week-end","four"], i:[["Rôti de porc",1000,"g","VI"],["Flageolets",800,"g","ES"],["Oignon",1,"","FL"]],
+    s:["Dorer le rôti, puis 50 min au four à 180 °C.","Chauffer les flageolets avec l'oignon revenu.","Trancher et servir avec le jus."] },
+  { id:"wraps", n:"Wraps poulet crudités", t:15, tags:["rapide"], i:[["Tortillas de blé",8,"","ES"],["Poulet rôti tranché",400,"g","CH"],["Carotte",2,"","FL"],["Salade",1,"","FL"],["Fromage frais",150,"g","CR"]],
+    s:["Tartiner les tortillas de fromage frais.","Garnir de poulet, carottes râpées et salade.","Rouler bien serré et couper en deux."] }
+];
+
+const BREAKFASTS = [
+  { id:"tartines", n:"Tartines beurre-confiture et jus d'orange", t:5, tags:["semaine"], i:[["Pain de mie complet",250,"g","PA"],["Beurre",40,"g","CR"],["Confiture",150,"g","SU"],["Jus d'orange",1000,"ml","BO"]],
+    s:["Griller le pain, beurrer, confiture.","Un verre de jus chacun."] },
+  { id:"cereales", n:"Céréales, lait et banane", t:3, tags:["semaine"], i:[["Céréales",300,"g","SU"],["Lait demi-écrémé",1000,"ml","CR"],["Banane",4,"","FL"]],
+    s:["Un bol de céréales avec du lait, une banane chacun."] },
+  { id:"porridge", n:"Porridge pomme-cannelle", t:10, tags:["semaine"], i:[["Flocons d'avoine",300,"g","SU"],["Lait demi-écrémé",1000,"ml","CR"],["Pomme",2,"","FL"],["Miel",40,"g","SU"]],
+    s:["Cuire flocons et lait 5 min en remuant.","Ajouter la pomme râpée, la cannelle et le miel."] },
+  { id:"yaourt", n:"Yaourt, granola et fruits rouges", t:3, tags:["semaine"], i:[["Yaourts nature",8,"pots","CR"],["Granola",300,"g","SU"],["Fruits rouges surgelés",300,"g","SG"]],
+    s:["Sortir les fruits rouges la veille au frigo.","Deux yaourts chacun avec granola et fruits."] },
+  { id:"fromageblanc", n:"Fromage blanc, miel et banane, pain grillé", t:5, tags:["semaine"], i:[["Fromage blanc",1000,"g","CR"],["Miel",40,"g","SU"],["Banane",3,"","FL"],["Pain de mie complet",250,"g","PA"]],
+    s:["Fromage blanc avec miel et banane en rondelles.","Pain grillé à côté."] },
+  { id:"brioche", n:"Brioche et chocolat chaud", t:5, tags:["semaine"], i:[["Brioche tranchée",500,"g","PA"],["Chocolat en poudre",80,"g","SU"],["Lait demi-écrémé",1000,"ml","CR"],["Pomme",4,"","FL"]],
+    s:["Chauffer le lait, ajouter le chocolat.","Brioche et une pomme chacun."] },
+  { id:"oeufs", n:"Œufs brouillés, pain grillé et jus", t:10, tags:["semaine","week-end"], i:[["Œufs",8,"","CR"],["Pain de mie complet",250,"g","PA"],["Beurre",30,"g","CR"],["Jus d'orange",1000,"ml","BO"]],
+    s:["Battre les œufs, cuire à feu doux dans le beurre en remuant.","Servir avec le pain grillé."] },
+  { id:"pancakes", n:"Pancakes et sirop d'érable", t:25, tags:["week-end"], i:[["Farine",250,"g","PL"],["Œufs",3,"","CR"],["Lait demi-écrémé",400,"ml","CR"],["Sucre",30,"g","PL"],["Levure chimique",1,"sachet","PL"],["Sirop d'érable",1,"bouteille","SU"],["Banane",2,"","FL"]],
+    s:["Mélanger farine, sucre, levure, puis œufs et lait.","Cuire de petites louches à la poêle, 1 à 2 min par face.","Servir avec sirop et banane."] },
+  { id:"crepes", n:"Crêpes", t:30, tags:["week-end"], i:[["Farine",250,"g","PL"],["Œufs",4,"","CR"],["Lait demi-écrémé",500,"ml","CR"],["Pâte à tartiner",1,"pot","SU"],["Sucre",30,"g","PL"]],
+    s:["Mélanger farine et œufs, ajouter le lait petit à petit.","Laisser reposer si possible.","Cuire à la poêle bien chaude."] },
+  { id:"painperdu", n:"Pain perdu", t:20, tags:["week-end"], i:[["Brioche tranchée",500,"g","PA"],["Œufs",4,"","CR"],["Lait demi-écrémé",400,"ml","CR"],["Sucre",40,"g","PL"],["Beurre",40,"g","CR"]],
+    s:["Battre œufs, lait et sucre.","Tremper les tranches, dorer au beurre 2 min par face."] }
+];
+
+const ALL = {}; MEALS.forEach(r => { r.kind = "repas"; ALL[r.id] = r; }); BREAKFASTS.forEach(r => { r.kind = "pdj"; ALL[r.id] = r; });
+
+/* ---------- Semaine (samedi → vendredi) ---------- */
+const DAYS = ["Samedi","Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi"];
+const MONTHS = ["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+const LUNCH_DAYS = [0, 1, 4]; // samedi, dimanche, mercredi
+function ymd(d) { return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function fromKey(k) { const [y,m,d] = k.split("-").map(Number); return new Date(y, m-1, d); }
+function fmt(d) { return d.getDate() + " " + MONTHS[d.getMonth()]; }
+function today0() { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
+function lastSaturday(d) { return addDays(d, -((d.getDay() + 1) % 7)); }   // samedi de la semaine en cours
+function nextSaturday(d) { return addDays(d, (6 - d.getDay() + 7) % 7); }  // aujourd'hui si samedi
+
+/* ---------- Stockage (dans ce navigateur) ---------- */
+const STORE_KEY = "courses-hebdo:v1";
+let store = { people: 4, weeks: {} };
+try { const raw = localStorage.getItem(STORE_KEY); if (raw) store = Object.assign(store, JSON.parse(raw)); } catch (e) {}
+function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) {} }
+
+function defaultWeek() {
+  const t = today0(), dow = t.getDay();
+  if (dow === 5 || dow === 6) return ymd(nextSaturday(t));   // vendredi : on prépare ; samedi : jour du Drive
+  const cur = ymd(lastSaturday(t));
+  return store.weeks[cur] ? cur : ymd(nextSaturday(t));
+}
+let weekKey = defaultWeek();
+
+/* ---------- Proposition ---------- */
+function rng(seedStr) {
+  let h = 1779033703 ^ seedStr.length;
+  for (let i = 0; i < seedStr.length; i++) { h = Math.imul(h ^ seedStr.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; }
+  return function () { h = Math.imul(h ^ h >>> 16, 2246822507); h = Math.imul(h ^ h >>> 13, 3266489909); h ^= h >>> 16; return (h >>> 0) / 4294967296; };
+}
+function shuffle(arr, r) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const has = t => r => r.tags.includes(t);
+const quick = r => r.t <= 35;
+
+function propose(key, n) {
+  const r = rng(key + "#" + n);
+  const pool = shuffle(MEALS, r), used = new Set(), slots = {};
+  function pick(pred, avoid) {
+    let c = pool.find(m => !used.has(m.id) && pred(m) && !(avoid && avoid(m)));
+    if (!c) c = pool.find(m => !used.has(m.id) && pred(m));
+    if (!c) c = pool.find(m => !used.has(m.id));
+    used.add(c.id); return c.id;
+  }
+  // Midis du week-end : plats qui prennent un peu plus de temps
+  slots["0-midi"] = pick(has("week-end"));
+  slots["1-midi"] = pick(has("week-end"));
+  // Un soir de semaine au poisson, un autre végétarien
+  const weekday = shuffle([2,3,4,5,6], r);
+  slots[weekday[0] + "-soir"] = pick(has("poisson"));
+  slots[weekday[1] + "-soir"] = pick(has("végétarien"));
+  // Le reste : soirs de semaine rapides, pas de deuxième plat au four le même jour
+  for (const d of [0,1,2,3,4,5,6]) {
+    if (slots[d + "-soir"]) continue;
+    slots[d + "-soir"] = pick(d >= 2 ? quick : () => true, m => d >= 2 && m.tags.includes("week-end"));
+  }
+  slots["4-midi"] = pick(quick);
+  // Petits déjeuners : rapides en semaine, plus gourmands le week-end
+  const pw = shuffle(BREAKFASTS.filter(has("semaine")), r), pe = shuffle(BREAKFASTS.filter(has("week-end")), r);
+  slots["0-pdj"] = pe[0].id; slots["1-pdj"] = pe[1].id;
+  [2,3,4,5,6].forEach((d, i) => { slots[d + "-pdj"] = pw[i % pw.length].id; });
+  return slots;
+}
+function week() {
+  if (!store.weeks[weekKey]) { store.weeks[weekKey] = { n: 0, slots: propose(weekKey, 0), checked: {}, extras: "" }; save(); }
+  return store.weeks[weekKey];
+}
+
+/* ---------- Quantités ---------- */
+function scale() { return (store.people || 4) / 4; }
+function fmtQty(q, u) {
+  const round = v => (Math.round(v * 10) / 10).toString().replace(".", ",");
+  if (u === "g") return q >= 1000 ? round(q / 1000) + " kg" : Math.round(q / 10) * 10 + " g";
+  if (u === "ml") return q >= 1000 ? round(q / 1000) + " L" : Math.round(q / 10) + " cl";
+  const n = Math.ceil(q - 0.01);
+  if (u === "") return "× " + n;
+  return n + " " + u;
+}
+function shoppingList() {
+  const w = week(), map = new Map(), k = scale();
+  Object.entries(w.slots).forEach(([slot, id]) => {
+    const rec = ALL[id]; if (!rec) return;
+    rec.i.forEach(([name, q, u, ray]) => {
+      const key = name + "|" + u;
+      if (!map.has(key)) map.set(key, { name, u, ray, q: 0, uses: new Set() });
+      const it = map.get(key); it.q += q * k; it.uses.add(rec.n);
+    });
+  });
+  const groups = {};
+  map.forEach((it, key) => { (groups[it.ray] = groups[it.ray] || []).push(Object.assign(it, { key })); });
+  Object.values(groups).forEach(g => g.sort((a, b) => a.name.localeCompare(b.name, "fr")));
+  return groups;
+}
+
+/* ---------- Rendu ---------- */
+const $ = id => document.getElementById(id);
+function renderHeader() {
+  const s = fromKey(weekKey), e = addDays(s, 6);
+  $("weekLabel").textContent = fmt(s) + " → " + fmt(e);
+  const t = ymd(today0()), pick = fromKey(weekKey);
+  const friday = addDays(pick, -1);
+  const line = t === ymd(pick) ? "Drive Carrefour <b>aujourd'hui</b>" : t < ymd(pick)
+    ? "Choix le <b>vendredi " + fmt(friday) + " midi</b>, Drive le <b>samedi " + fmt(pick) + " matin</b>"
+    : "Semaine du Drive du <b>samedi " + fmt(pick) + "</b>";
+  $("pickupLine").innerHTML = line; $("pickupLine2").innerHTML = line;
+  $("people").value = String(store.people || 4);
+}
+
+function optionsFor(kind, selected) {
+  if (kind === "pdj") return BREAKFASTS.map(b => `<option value="${b.id}"${b.id === selected ? " selected" : ""}>${b.n}</option>`).join("");
+  const groups = [["Rapides (35 min max)", MEALS.filter(m => quick(m) && !m.tags.includes("week-end"))], ["Plus longs ou du week-end", MEALS.filter(m => !quick(m) || m.tags.includes("week-end"))]];
+  return groups.map(([label, list]) => `<optgroup label="${label}">` + list.map(m => `<option value="${m.id}"${m.id === selected ? " selected" : ""}>${m.n}</option>`).join("") + "</optgroup>").join("");
+}
+
+function renderDays() {
+  const w = week(), s = fromKey(weekKey), t = ymd(today0());
+  const html = DAYS.map((name, d) => {
+    const date = addDays(s, d), isToday = ymd(date) === t;
+    const rows = [["pdj", "Petit-déj"]];
+    if (LUNCH_DAYS.includes(d)) rows.push(["midi", "Midi"]);
+    rows.push(["soir", "Soir"]);
+    return `<article class="day${isToday ? " today" : ""}">
+      <div class="day-head"><h2>${name}</h2><span class="date">${isToday ? '<span class="tag-today">Aujourd\'hui</span> · ' : ""}${fmt(date)}</span></div>
+      ${rows.map(([slot, label]) => {
+        const key = d + "-" + slot, id = w.slots[key], rec = ALL[id], kind = slot === "pdj" ? "pdj" : "repas";
+        return `<div class="slot">
+          <span class="when">${label}</span>
+          <div class="dish">
+            <select id="sel-${key}" data-slot="${key}" aria-label="${name}, ${label}">${optionsFor(kind, id)}</select>
+            <div class="meta">${rec ? rec.t + " min · " : ""}<button data-recipe="${id}">voir la recette</button></div>
+          </div>
+          <button class="icon-btn" data-swap="${key}" aria-label="Proposer un autre plat">↻</button>
+        </div>`;
+      }).join("")}
+    </article>`;
+  }).join("");
+  $("days").innerHTML = html;
+}
+
+function renderList() {
+  const w = week(), groups = shoppingList();
+  let total = 0, done = 0, html = "";
+  RAYON_ORDER.forEach(ray => {
+    const items = groups[ray]; if (!items) return;
+    const pantry = ray === "PL";
+    html += `<section class="rayon${pantry ? " pantry" : ""}"><h3>${RAYONS[ray]}</h3>`;
+    if (pantry) html += `<p class="hint">D'habitude déjà à la maison. Coche ce que tu as, ajoute le reste au panier.</p>`;
+    html += `<ul class="items">` + items.map(it => {
+      const id = "chk-" + it.key.replace(/[^a-z0-9]/gi, "_"), on = !!w.checked[it.key];
+      total++; if (on) done++;
+      const uses = [...it.uses]; const usesTxt = uses.length > 2 ? uses.length + " repas" : uses.join(", ");
+      return `<li class="${on ? "done" : ""}">
+        <input type="checkbox" id="${id}" data-key="${it.key.replace(/"/g, "&quot;")}"${on ? " checked" : ""}>
+        <label for="${id}">${it.name}<span class="for">${usesTxt}</span></label>
+        <span class="qty">${fmtQty(it.q, it.u)}</span>
+        <a href="https://www.carrefour.fr/s?q=${encodeURIComponent(it.name)}" target="_blank" rel="noopener">Chercher</a>
+      </li>`;
+    }).join("") + `</ul></section>`;
+  });
+  $("list").innerHTML = html || `<p class="empty">Choisis des repas dans l'onglet Menu pour remplir la liste.</p>`;
+  $("countCourses").textContent = "(" + (total - done) + ")";
+  $("progressBar").style.width = total ? (100 * done / total) + "%" : "0";
+  $("extras").value = w.extras || "";
+}
+
+let filter = "tous";
+const FILTERS = [["tous","Tout"],["pdj","Petits-déj"],["rapide","Rapides"],["week-end","Week-end"],["poisson","Poisson"],["végétarien","Végétarien"]];
+function recipeBody(rec) {
+  const k = rec.kind === "repas" || rec.kind === "pdj" ? scale() : 1;
+  return `<h4>Ingrédients pour ${store.people || 4}</h4><ul>${rec.i.map(([n, q, u]) => `<li>${n} <span class="q">${fmtQty(q * k, u)}</span></li>`).join("")}</ul>
+    <h4>Étapes</h4><ol>${rec.s.map(x => `<li>${x}</li>`).join("")}</ol>`;
+}
+function renderRecipes() {
+  $("filters").innerHTML = FILTERS.map(([v, l]) => `<button class="chip" data-filter="${v}" aria-pressed="${v === filter}">${l}</button>`).join("");
+  const list = [...BREAKFASTS, ...MEALS].filter(r => filter === "tous" || (filter === "pdj" ? r.kind === "pdj" : r.kind === "repas" && (filter === "rapide" ? quick(r) : r.tags.includes(filter))));
+  $("recipes").innerHTML = list.map(r => `<details class="recipe">
+    <summary><strong>${r.n}</strong><span class="time">${r.t} min</span>
+      <span class="badges">${r.kind === "pdj" ? '<span class="badge warm">Petit-déj</span>' : ""}${r.tags.filter(t => t !== "semaine").map(t => `<span class="badge">${t}</span>`).join("")}</span></summary>
+    <div class="recipe-body">${recipeBody(r)}</div></details>`).join("");
+}
+
+function renderAll() { renderHeader(); renderDays(); renderList(); renderRecipes(); }
+
+/* ---------- Interactions ---------- */
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 1800); }
+function showTab(name) {
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  ["menu","courses","recettes"].forEach(p => { $("panel-" + p).hidden = p !== name; });
+  try { localStorage.setItem(STORE_KEY + ":tab", name); } catch (e) {}
+  window.scrollTo({ top: 0 });
+}
+document.querySelector(".tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
+$("toCourses").addEventListener("click", () => showTab("courses"));
+
+$("days").addEventListener("change", e => {
+  const sel = e.target.closest("select[data-slot]"); if (!sel) return;
+  week().slots[sel.dataset.slot] = sel.value; save(); renderDays(); renderList();
+});
+$("days").addEventListener("click", e => {
+  const sw = e.target.closest("[data-swap]");
+  if (sw) {
+    const key = sw.dataset.swap, w = week(), list = key.endsWith("pdj") ? BREAKFASTS : MEALS;
+    const taken = new Set(Object.values(w.slots));
+    let opts = list.filter(r => !taken.has(r.id));
+    if (key.endsWith("pdj")) { const d = +key[0]; opts = list.filter(r => r.id !== w.slots[key] && r.tags.includes(d <= 1 ? "week-end" : "semaine")); }
+    if (!opts.length) opts = list.filter(r => r.id !== w.slots[key]);
+    w.slots[key] = opts[Math.floor(Math.random() * opts.length)].id; save(); renderDays(); renderList();
+    return;
+  }
+  const rb = e.target.closest("[data-recipe]"); if (rb) openRecipe(rb.dataset.recipe);
+});
+function openRecipe(id) {
+  const r = ALL[id]; if (!r) return;
+  $("dlgTitle").textContent = r.n; $("dlgBody").innerHTML = recipeBody(r);
+  const d = $("dlg"); if (d.showModal) d.showModal(); else d.setAttribute("open", "");
+}
+$("dlgClose").addEventListener("click", () => $("dlg").close());
+$("dlg").addEventListener("click", e => { if (e.target === $("dlg")) $("dlg").close(); });
+
+$("reroll").addEventListener("click", () => {
+  const w = week(); w.n = (w.n || 0) + 1; w.slots = propose(weekKey, w.n); save(); renderDays(); renderList(); toast("Nouvelle proposition");
+});
+$("people").addEventListener("change", e => { store.people = +e.target.value; save(); renderList(); renderRecipes(); toast("Quantités pour " + store.people); });
+$("prevWeek").addEventListener("click", () => { weekKey = ymd(addDays(fromKey(weekKey), -7)); renderAll(); });
+$("nextWeek").addEventListener("click", () => { weekKey = ymd(addDays(fromKey(weekKey), 7)); renderAll(); });
+
+$("list").addEventListener("change", e => {
+  const c = e.target.closest("input[data-key]"); if (!c) return;
+  const w = week(); if (c.checked) w.checked[c.dataset.key] = 1; else delete w.checked[c.dataset.key];
+  save(); renderList();
+});
+$("uncheckAll").addEventListener("click", () => { week().checked = {}; save(); renderList(); });
+$("extras").addEventListener("input", e => { week().extras = e.target.value; save(); });
+
+function listAsText() {
+  const w = week(), groups = shoppingList(), s = fromKey(weekKey);
+  let out = "Courses Drive du samedi " + fmt(s) + " (" + (store.people || 4) + " pers.)\n";
+  RAYON_ORDER.forEach(ray => {
+    const items = (groups[ray] || []).filter(it => !w.checked[it.key]); if (!items.length) return;
+    out += "\n" + RAYONS[ray].toUpperCase() + "\n" + items.map(it => "- " + it.name + " : " + fmtQty(it.q, it.u)).join("\n") + "\n";
+  });
+  const extra = (w.extras || "").split("\n").map(x => x.trim()).filter(Boolean);
+  if (extra.length) out += "\nEN PLUS\n" + extra.map(x => "- " + x).join("\n") + "\n";
+  return out;
+}
+$("copyList").addEventListener("click", () => {
+  const text = listAsText();
+  const fallback = () => { const box = $("copyBox"); box.value = text; box.hidden = false; box.focus(); box.select(); toast("Texte sélectionné, copie-le à la main"); };
+  try { navigator.clipboard.writeText(text).then(() => toast("Liste copiée"), fallback); } catch (e) { fallback(); }
+});
+
+renderAll();
+try { const t = localStorage.getItem(STORE_KEY + ":tab"); if (t && t !== "menu") showTab(t); } catch (e) {}
+})();
+</script>
+</body>
+</html>
